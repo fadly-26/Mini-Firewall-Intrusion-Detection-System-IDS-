@@ -16,15 +16,19 @@ Program ini dibuat untuk memperlihatkan bagaimana konsep Struktur Data dan Algor
 - monitoring sesi aktif
 - pencatatan log alarm keamanan
 - analisis jalur serangan pada topologi jaringan
+- penerapan graph, BFS, dan DFS
 - perbandingan algoritma searching dan sorting
 - analisis kompleksitas Big O
 
 ## Posisi Program dalam Jaringan
 
-Program ini diposisikan sebagai sistem keamanan yang berjalan pada firewall.
+Program ini diposisikan sebagai sistem keamanan yang berjalan pada firewall. Firewall berada di antara jaringan internal kantor dan router menuju internet.
 
 ```text
 PC Kantor
+   |
+   v
+Office Switch
    |
    v
 Core Switch
@@ -54,44 +58,54 @@ Maka maknanya adalah:
 
 ## Arsitektur Topologi
 
-Topologi jaringan yang digunakan adalah jaringan kantor kecil:
+Topologi jaringan yang digunakan adalah jaringan kantor kecil dengan satu server utama sebagai aset penting yang dilindungi.
 
 ```text
-                         Router
-                           |
-                   +-------------------+
-                   | Firewall + Mini   |
-                   | IDS               |
-                   +-------------------+
-                           |
-                     Core Switch
-   ________________________|________________________
-  |          |          |        |          |       |
-Web       Database   PC Admin  PC HRD   PC       PC
-Server    Server                        Karyawan Karyawan
-                                         1        2
+                     Internet
+                         |
+                    +----------+
+                    | Router   |
+                    +----------+
+                         |
+              +----------------------+
+              | Firewall + Mini IDS  |
+              +----------------------+
+                         |
+                  +---------------+
+                  | Core Switch   |
+                  +---------------+
+                    /           \
+                   /             \
+         +---------------+   +---------------+
+         | Server Switch |   | Office Switch |
+         +---------------+   +---------------+
+                 |             /     |      \
+                 |            /      |       \
+              Server    PC Admin  PC HRD  PC Karyawan
 ```
 
 Versi hubungan graph yang dipakai program:
 
 ```text
+Internet <-> Router
 Router <-> Firewall + Mini IDS
 Firewall + Mini IDS <-> Core Switch
-Core Switch <-> Web Server
-Core Switch <-> Database Server
-Core Switch <-> PC Admin
-Core Switch <-> PC HRD
-Core Switch <-> PC Karyawan 1
-Core Switch <-> PC Karyawan 2
+Core Switch <-> Server Switch
+Core Switch <-> Office Switch
+Server Switch <-> Server
+Office Switch <-> PC Admin
+Office Switch <-> PC HRD
+Office Switch <-> PC Karyawan
 ```
 
 Catatan penting:
 
 - **Firewall + Mini IDS** adalah tempat program ini diposisikan.
-- **PC Admin, PC HRD, PC Karyawan 1, dan PC Karyawan 2** adalah perangkat asal trafik.
-- **Web Server dan Database Server** adalah aset internal yang dilindungi.
-- **Database Server** dianggap sebagai aset paling kritis untuk analisis BFS.
-- **Router** adalah penghubung jaringan kantor menuju internet, tetapi bukan perangkat asal trafik pada simulasi input.
+- **PC Admin, PC HRD, dan PC Karyawan** adalah perangkat asal trafik.
+- **Server** adalah aset penting yang dilindungi.
+- **Server Switch** menghubungkan aset server ke jaringan utama.
+- **Office Switch** menghubungkan perangkat pengguna kantor.
+- **Router** adalah penghubung jaringan kantor menuju internet.
 
 ## Alur Kerja Sistem
 
@@ -110,8 +124,7 @@ Alur program berjalan berbasis menu. Artinya, setiap fitur dijalankan berdasarka
         [ Pilih Perangkat Asal Trafik ]
         +-- PC Admin
         +-- PC HRD
-        +-- PC Karyawan 1
-        +-- PC Karyawan 2
+        +-- PC Karyawan
                          |
                          v
 [ Input Target IP/Domain + Port + Payload Size ]
@@ -169,7 +182,7 @@ Alur program berjalan berbasis menu. Artinya, setiap fitur dijalankan berdasarka
               +-- [4] Lihat Stack Alert
               +-- [5] Lihat Linked List Sesi Aktif
               +-- [6] Lihat Topologi Graph
-              +-- [7] BFS ke Database Server
+              +-- [7] BFS ke Server
               +-- [8] DFS Blast Radius
               +-- [9] Sorting Prioritas Alarm
               +-- [10] Searching Blacklist
@@ -201,8 +214,8 @@ Program ini dapat dibaca sebagai simulasi sederhana proses incident response.
 9. Jika paket aman, koneksi dicatat ke Linked List sesi aktif.
 10. Jika paket berbahaya, paket diblokir, alert masuk ke Stack, data blocked disimpan ke Vector, dan perangkat asal ditandai `BERISIKO`.
 11. Admin dapat membuka Graph untuk melihat status perangkat pada topologi.
-12. Admin dapat menjalankan BFS untuk mencari jalur tercepat menuju `Database Server`.
-13. Admin dapat menjalankan DFS untuk melihat blast radius atau jangkauan dampak dari perangkat berisiko.
+12. Admin dapat menjalankan BFS untuk mencari jalur tercepat menuju `Server`.
+13. Admin dapat menjalankan DFS untuk melihat jangkauan konektivitas dari perangkat berisiko.
 14. Admin dapat menjalankan Sorting untuk mengurutkan log alarm berdasarkan payload.
 15. Admin dapat menjalankan Searching untuk membandingkan Linear Search dan Binary Search pada blacklist.
 
@@ -216,9 +229,9 @@ Program ini dapat dibaca sebagai simulasi sederhana proses incident response.
 | Stack | `stack<string> tumpukanAlert` | Menyimpan log alarm dari paket yang diblokir. Alert terbaru akan tampil paling atas sesuai prinsip LIFO. |
 | Linked List | `NodeSesi* listSesiAktif` | Menyimpan paket yang lolos inspeksi atau `ALLOWED` sebagai sesi aktif. Penambahan data dilakukan secara dinamis. |
 | Binary Search Tree | `NodeTree* databasePortBahaya` | Menyimpan port berbahaya seperti 21, 22, 23, 80, 445, dan 4444 beserta informasi ancamannya. |
-| Graph | `map<string, vector<string>> topologiJaringan` | Memodelkan topologi jaringan kantor: Router, Firewall + Mini IDS, Core Switch, server, dan PC kantor. |
-| BFS | `bfsJalurTercepat()` | Mencari jalur terpendek dari perangkat berisiko menuju `Database Server` sebagai aset kritis. |
-| DFS | `dfsHitungBlastRadius()` | Menelusuri seluruh perangkat yang dapat dijangkau dari satu titik awal untuk simulasi blast radius. |
+| Graph | `map<string, vector<string>> topologiJaringan` | Memodelkan topologi jaringan kantor: Internet, Router, Firewall, Core Switch, Server Switch, Office Switch, Server, dan PC kantor. |
+| BFS | `bfsJalurTercepat()` | Mencari jalur terpendek dari perangkat berisiko menuju `Server` sebagai aset penting. |
+| DFS | `dfsHitungBlastRadius()` | Menelusuri seluruh node yang dapat dijangkau dari satu titik awal untuk simulasi blast radius. |
 | Searching | `linearSearchArray()` dan `binarySearchArray()` | Membandingkan pencarian biasa dan pencarian biner pada blacklist domain/IP. |
 | Sorting | `bubbleSortLogAlarm()` dan `quickSortLogAlarm()` | Mengurutkan paket blocked berdasarkan ukuran payload dari terbesar ke terkecil. |
 | Vector | `vector<PaketData> logAlertData` | Menyimpan data paket blocked dalam bentuk terstruktur agar bisa digunakan oleh fitur Sorting. |
@@ -257,19 +270,21 @@ Menu ini menampilkan Linked List sesi aktif, yaitu daftar koneksi yang mendapatk
 
 Menu ini menampilkan Graph topologi jaringan kantor beserta status setiap node. Status awal perangkat adalah `AMAN`, lalu berubah menjadi `BERISIKO` jika perangkat tersebut pernah mengirim paket yang diblokir.
 
-### Menu [7] Deteksi Jalur Serangan ke Aset Kritis
+### Menu [7] Deteksi Jalur Serangan ke Aset Penting
 
-Menu ini menjalankan BFS. Admin memilih titik awal, lalu program mencari jalur tercepat menuju `Database Server`.
+Menu ini menjalankan BFS. Admin memilih titik awal, lalu program mencari jalur tercepat menuju `Server`.
 
 Contoh:
 
 ```text
-PC HRD -> Core Switch -> Database Server
+PC HRD -> Office Switch -> Core Switch -> Server Switch -> Server
 ```
 
 ### Menu [8] Analisis Blast Radius
 
-Menu ini menjalankan DFS. Program menelusuri perangkat yang dapat dijangkau dari satu node awal. Fitur ini menggambarkan potensi dampak jika sebuah perangkat berisiko tidak segera diisolasi.
+Menu ini menjalankan DFS. Program menelusuri node yang dapat dijangkau dari satu titik awal. Fitur ini menggambarkan area konektivitas yang perlu diperiksa jika sebuah perangkat ditandai berisiko.
+
+Hasil DFS tidak berarti semua node pasti terinfeksi. Hasil tersebut menunjukkan perangkat atau node jaringan yang berada dalam jangkauan konektivitas dari titik awal insiden.
 
 ### Menu [9] Urutkan Log Alarm Berdasarkan Prioritas
 
@@ -302,11 +317,10 @@ Perangkat asal trafik dibuat seperti jaringan kantor:
 ```text
 [1] PC Admin
 [2] PC HRD
-[3] PC Karyawan 1
-[4] PC Karyawan 2
+[3] PC Karyawan
 ```
 
-Perangkat ini dipilih karena paling masuk akal sebagai sumber trafik keluar. Web Server dan Database Server tetap ada di topologi, tetapi diposisikan sebagai aset yang dilindungi.
+Perangkat ini dipilih karena paling masuk akal sebagai sumber trafik keluar dari jaringan kantor. Server tetap ada di topologi, tetapi diposisikan sebagai aset penting yang dilindungi.
 
 ### 3. Queue-Based Traffic Buffer
 
@@ -358,19 +372,38 @@ Status tersebut dapat dilihat pada menu topologi jaringan.
 
 ### 8. BFS Attack Path Analysis
 
-BFS digunakan untuk mencari jalur tercepat dari perangkat berisiko menuju Database Server.
+BFS digunakan untuk mencari jalur tercepat dari perangkat berisiko menuju Server sebagai aset penting.
 
 Contoh:
 
 ```text
-PC HRD -> Core Switch -> Database Server
-Jumlah hop: 2
+PC HRD -> Office Switch -> Core Switch -> Server Switch -> Server
+Jumlah hop: 4
 Kompleksitas: O(V + E)
+```
+
+BFS menjawab pertanyaan:
+
+```text
+Seberapa dekat perangkat berisiko dengan Server?
 ```
 
 ### 9. DFS Blast Radius Analysis
 
-DFS digunakan untuk menelusuri perangkat mana saja yang bisa dijangkau dari satu perangkat berisiko. Ini menggambarkan potensi dampak insiden apabila perangkat tersebut tidak segera diisolasi.
+DFS digunakan untuk menelusuri node mana saja yang bisa dijangkau dari satu perangkat berisiko. Ini menggambarkan potensi area yang perlu diperiksa apabila perangkat tersebut tidak segera ditangani.
+
+Contoh:
+
+```text
+PC HRD -> Office Switch -> PC Admin -> PC Karyawan -> Core Switch -> Server Switch -> Server -> Firewall + Mini IDS -> Router -> Internet
+```
+
+Catatan:
+
+```text
+Hasil DFS bukan berarti semua node pasti terinfeksi.
+Hasil DFS menunjukkan jangkauan konektivitas yang perlu dipantau.
+```
 
 ### 10. Alarm Prioritization
 
@@ -399,7 +432,7 @@ Binary Search dilakukan setelah data blacklist diurutkan menggunakan Insertion S
 [4] Lihat Log Alarm Serangan (Stack/LIFO)
 [5] Lihat Monitoring Sesi Aktif (Linked List)
 [6] Lihat Topologi Jaringan (Graph)
-[7] Deteksi Jalur Serangan ke Aset Kritis (BFS)
+[7] Deteksi Jalur Serangan ke Server (BFS)
 [8] Analisis Blast Radius / Dampak Insiden (DFS)
 [9] Urutkan Log Alarm Berdasarkan Prioritas (Sorting)
 [10] Bandingkan Linear vs Binary Search (Blacklist)
@@ -455,7 +488,7 @@ PC HRD ditandai BERISIKO
 Langkah:
 
 1. Masuk Menu `[1]`.
-2. Pilih `PC Karyawan 1`.
+2. Pilih `PC Karyawan`.
 3. Masukkan target: `1.1.1.1`.
 4. Masukkan port: `443`.
 5. Masukkan payload: `80`.
@@ -466,7 +499,7 @@ Hasil:
 ```text
 BLOCKED
 Alasan: IP Tujuan Terdaftar di Blacklist Jaringan
-PC Karyawan 1 ditandai BERISIKO
+PC Karyawan ditandai BERISIKO
 ```
 
 ### 3. Blokir Port Kritis
@@ -474,7 +507,7 @@ PC Karyawan 1 ditandai BERISIKO
 Langkah:
 
 1. Masuk Menu `[1]`.
-2. Pilih `PC Karyawan 2`.
+2. Pilih `PC Karyawan`.
 3. Masukkan target: `8.8.8.8`.
 4. Masukkan port: `4444`.
 5. Masukkan payload: `15`.
@@ -518,8 +551,8 @@ Langkah:
 Hasil contoh:
 
 ```text
-PC HRD -> Core Switch -> Database Server
-Jumlah hop: 2
+PC HRD -> Office Switch -> Core Switch -> Server Switch -> Server
+Jumlah hop: 4
 Kompleksitas: O(V + E)
 ```
 
@@ -527,12 +560,23 @@ Kompleksitas: O(V + E)
 
 Langkah:
 
-1. Masuk Menu `[8]`.
-2. Pilih perangkat yang berstatus BERISIKO.
+1. Buat paket blocked dari salah satu PC, misalnya `PC HRD`.
+2. Jalankan inspeksi firewall agar status PC berubah menjadi `BERISIKO`.
+3. Masuk Menu `[8]`.
+4. Pilih `PC HRD` sebagai titik awal.
 
-Hasil:
+Hasil contoh:
 
-Program menampilkan daftar perangkat yang dapat dijangkau dari titik awal tersebut sebagai simulasi blast radius.
+```text
+PC HRD -> Office Switch -> PC Admin -> PC Karyawan -> Core Switch -> Server Switch -> Server -> Firewall + Mini IDS -> Router -> Internet
+```
+
+Interpretasi:
+
+```text
+Node-node tersebut bukan berarti pasti terinfeksi.
+Node-node tersebut adalah area jangkauan konektivitas yang perlu dipantau atau diperiksa.
+```
 
 ### 7. Sorting Log Alarm
 
@@ -566,10 +610,12 @@ Program membandingkan jumlah perbandingan Linear Search dan Binary Search.
 4. Alarm masuk ke Stack.
 5. Status `PC HRD` berubah menjadi BERISIKO.
 6. Lihat Graph untuk memastikan perubahan status.
-7. Jalankan BFS untuk melihat jalur tercepat menuju Database Server.
-8. Jalankan DFS untuk mengetahui perangkat yang berpotensi terdampak.
+7. Jalankan BFS untuk melihat jalur tercepat menuju Server.
+8. Jalankan DFS untuk mengetahui area konektivitas yang perlu dipantau.
 9. Jalankan Sorting untuk menentukan alarm prioritas.
 
 ## Kesimpulan
 
-Mini Firewall & Intrusion Detection System (IDS) menunjukkan bagaimana konsep Struktur Data dan Algoritma dapat diintegrasikan ke dalam simulasi cyber security yang utuh. Queue digunakan sebagai buffer trafik, Array dan Binary Search Tree sebagai mekanisme inspeksi firewall, Linked List untuk sesi aktif, Stack untuk log alarm, dan Graph untuk memodelkan topologi jaringan kantor. BFS digunakan untuk mencari jalur tercepat menuju aset kritis, DFS digunakan untuk analisis blast radius, sedangkan Searching, Sorting, dan Big O digunakan untuk menunjukkan efisiensi algoritma.
+Mini Firewall & Intrusion Detection System (IDS) menunjukkan bagaimana konsep Struktur Data dan Algoritma dapat diintegrasikan ke dalam simulasi cyber security yang utuh. Queue digunakan sebagai buffer trafik, Array dan Binary Search Tree sebagai mekanisme inspeksi firewall, Linked List untuk sesi aktif, Stack untuk log alarm, dan Graph untuk memodelkan topologi jaringan kantor.
+
+BFS digunakan untuk mencari jalur tercepat dari perangkat berisiko menuju Server sebagai aset penting. DFS digunakan untuk menganalisis jangkauan konektivitas atau blast radius dari perangkat berisiko. Searching, Sorting, dan Big O digunakan untuk menunjukkan efisiensi algoritma yang digunakan dalam program.
